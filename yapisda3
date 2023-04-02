@@ -1,0 +1,174 @@
+#include <iostream>
+#include <fstream>
+
+using namespace std;
+
+// объявление структуры двусвязного нециклического списка
+struct doublyLinkedList
+{
+	int data; // значение
+	doublyLinkedList* next; // указатель на следующий элемент
+	doublyLinkedList* prev; // указатель на предыдущий элемент
+};
+
+// инициализация списка
+doublyLinkedList* initialisationList(int num)  // а- значение первого узла
+{
+	doublyLinkedList* list;
+	list = (struct doublyLinkedList*)malloc(sizeof(struct doublyLinkedList)); // // выделение памяти под корень списка
+	list->data = num;
+	list->next = NULL; // указатель на следующий узел
+	list->prev = NULL; // указатель на предыдущий узел
+	return list;
+}
+
+// добавление элемента в список
+doublyLinkedList* addElement(doublyLinkedList* newList, int num)
+{
+	doublyLinkedList* temp, *temp2;
+	temp = (doublyLinkedList*)malloc(sizeof(doublyLinkedList));
+	temp2 = newList->next; // сохранение указателя на следующий узел
+	newList->next = temp; // предыдущий узел указывает на создаваемый
+	temp->data = num; // сохранение поля данных добавляемого узла
+	temp->next = temp2; // созданный узел указывает на следующий узел
+	temp->prev = newList; // созданный узел указывает на предыдущий узел
+	if (temp2) temp2->prev = temp;
+	return temp;
+}
+// удаление элемента из списка
+void deleteElements(doublyLinkedList*& head) 
+{              //удаление элемента
+	if (head) 
+	{                          //рассматриваем только непустую голову
+		doublyLinkedList* temp = head->next;
+		delete head;
+		head = temp;
+	}
+}
+// функция обмена указателями, возвращает новый корень списка
+doublyLinkedList* swap1(struct doublyLinkedList* l1, struct doublyLinkedList* l2, struct doublyLinkedList* head)
+{
+	 doublyLinkedList* firstPrev, * secondPrev, * firstNext, * secondNext;
+	 firstPrev = l1->prev;  // узел предшествующий l1
+	 secondPrev = l2->prev;  // узел предшествующий l2
+	 firstNext = l1->next; // узел следующий за l1
+	 secondNext = l2->next; // узел следующий за l2
+	 if (l2 == firstNext)  // обмениваются соседние узлы
+	 {
+		 l2->next = l1;
+		 l2->prev = firstPrev;
+		 l1->next = secondNext;
+		 l1->prev = l2;
+		 if (secondNext != NULL) secondNext->prev = l1;
+		 if (l1 != head) firstPrev->next = l2;
+	 }
+	 else if (l1 == secondNext)  // обмениваются соседние узлы
+	 {
+		 l1->next = l2;
+		 l1->prev = secondPrev;
+		 l2->next = firstNext;
+		 l2->prev = l1;
+		 if (firstNext != NULL) firstNext->prev = l2;
+		 if (l2 != head) secondPrev->next = l1;
+	 }
+	 else  // обмениваются отстоящие узлы
+	 {
+		 if (l1 != head)  // указатель prev можно установить только для элемента,
+			 firstPrev->next = l2; // не являющегося корневым
+		 l2->next = firstNext;
+		 if (l2 != head) secondPrev->next = l1;
+		 l1->next = secondNext;
+		 l2->prev = firstPrev;
+		 if (secondNext != NULL) // указатель next можно установить только для элемента,
+			 secondNext->prev = l1; // не являющегося последним
+		 l1->prev = secondPrev;
+		 if (firstNext != NULL) firstNext->prev = l2;
+	 }
+	 if (l1 == head)
+		 return l2;
+	 if (l2 == head)
+		 return l1;
+	 return head;
+ }
+
+void swap2(doublyLinkedList* innerCurrent, doublyLinkedList* prev) {
+	innerCurrent->prev->next = innerCurrent->next;
+	if (innerCurrent->next) innerCurrent->next->prev = innerCurrent->prev;
+	innerCurrent->prev = prev;
+	innerCurrent->next = prev->next;
+	if (prev->next) prev->next->prev = innerCurrent;
+	prev->next = innerCurrent;
+}
+// функция для вывода в файл списка
+
+doublyLinkedList* insertionSort(doublyLinkedList* head) {
+	if (!head || !head->next) return head; // если список пустой или содержит 1 элемент, то он уже отсортирован, поэтому сразу возвращаем голову
+	
+	// ищем минимальный элемент
+	// так как сортировка вставками начинается со 2го, то необходимо, чтобы голова была минимальным элементом, иначе первые несколько элементов не отсортируются
+	// поэтому я ищу минимальный элемент и вставляю его в начало списка
+	doublyLinkedList* minNode = head;
+	doublyLinkedList* current = head->next;
+	while (current) {
+		if (current->data < minNode->data)
+			minNode = current;
+		current = current->next;
+	}
+
+	// Перестановка минимального элемента в начало списка
+	if (minNode != head)
+	{
+		head = swap1(head, minNode, head);
+		current = head->next;
+	}
+
+	while (current) {
+		doublyLinkedList* innerCurrent = current;
+		int value = innerCurrent->data;
+		doublyLinkedList* prev = innerCurrent->prev;
+		while (prev && prev->data > value)
+			prev = prev->prev;
+		if (!prev) 
+			head = swap1(innerCurrent, innerCurrent->prev, head);
+		else 
+			swap2(innerCurrent, prev);
+		current = current->next;
+	}
+	return head;
+}
+
+void listToFile(doublyLinkedList* head, int size) //вывод в файл
+{
+	ofstream toFile("output.txt");
+	doublyLinkedList* p = head;
+	toFile << size << " ";
+	do {
+		toFile << p->data << " ";
+		p = p->next;
+	} while (p);
+	toFile.close();
+}
+
+int main()
+{
+	int whichSort, listSize = 1, headList, number; // listSize = 1, потому что голова списка считывается заранее и не учитывается при подсчете размера списка
+
+	ifstream fromFile("input.txt");
+	fromFile >> whichSort;
+	fromFile >> headList;
+	doublyLinkedList* listForLaba = initialisationList(headList);
+
+	while (!fromFile.eof())
+	{
+		fromFile >> number;
+		addElement(listForLaba, number);
+		cout << number;
+		++listSize;
+	}
+
+	listForLaba = insertionSort(listForLaba);
+	listToFile(listForLaba, listSize);
+	for (int i = 0; i < listSize; i++) deleteElements(listForLaba);
+
+	return 0;
+}
