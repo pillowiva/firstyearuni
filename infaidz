@@ -1,0 +1,85 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <bitset>
+#include <algorithm>
+#include <vector>
+
+using namespace std;
+
+void readingInputFile(ifstream& fin, string w, unsigned long long int& n)
+{
+	fin.open("INPUT.txt");
+	if (!fin.is_open())
+		cout << "Error! File cannot be open.";
+	fin >> w;
+	n = stoi(w);
+	fin.close();
+}
+void fromDecimalToBinary(unsigned long long int num, vector <int> &vec) 
+{
+	while (num > 0)
+	{
+		int g = num & 1;
+		vec.push_back(g);
+		num >>= 1;
+	}
+	reverse(vec.begin(), vec.end());
+}
+int nextNumber(string &n, unsigned long long int n2)
+{
+	int countOfOne; // считаем к-во единиц в числе
+	bitset<numeric_limits<unsigned long long int>::digits> bitset(n2);
+	countOfOne = bitset.count();
+
+	string sortRevNumBin(n.begin(), n.end()); // вспомогательная строка, к-рая хранит отсортированную наоборот изначальную строку. помогает понять, двоичная запись имеет вид 111...11000...00 или нет
+	sort(sortRevNumBin.begin(), sortRevNumBin.end(), greater <>());
+
+	if ((countOfOne == 1) || (!n.rfind("0"))) // numberBinary == 2^n (одна 1 в старшем разряде числа, все остальные 0) или же numberBinary == 2^n - 1 (т.е. нет 0 в двоичной записи числа)
+	{
+		n.insert(1, "0");
+	}
+	else if (n.compare(sortRevNumBin) == 0) // если число имеет вид 111...110000...00
+	{
+		sort(n.begin()+1, n.end());
+		n.insert(1, "0");
+	}
+	else // остальные случаи, следующая перестановка цифр в числе
+	{
+		next_permutation(n.begin(), n.end());
+	}
+	return 0;
+}
+void outputNumberToFile(ofstream& fout, unsigned long long int nnd)
+{
+	fout.open("OUTPUT.txt");
+	if (!fout.is_open())
+		cout << "Error! File cannot be open.";
+	fout << nnd;
+	fout.close();
+}
+int main()
+{
+	unsigned long long int numDecimal, newNumDecimal;
+	ifstream fin;
+	ofstream fout;
+	string readNumber;
+	vector <int> vecBin;
+
+	readingInputFile(fin, readNumber, numDecimal);
+	fromDecimalToBinary(numDecimal, vecBin);
+	
+	//вектор, хранящий в себе двоичную запись числа, перевожу в строковый поток, затем в строку
+	string numBinary; 
+	stringstream vecToString;
+	copy(vecBin.begin(), vecBin.end(), ostream_iterator<int>(vecToString, "")); 
+	vecToString >> numBinary;
+
+	nextNumber(numBinary, numDecimal);
+	newNumDecimal = bitset<128>(numBinary).to_ullong(); // перевод из 2чной сс в 10чную
+
+	outputNumberToFile(fout, newNumDecimal);
+
+	return 0;
+}
