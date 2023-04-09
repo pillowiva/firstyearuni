@@ -1,0 +1,120 @@
+#define _CRT_SECURE_NO_WARNINGS 
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cstring>
+
+using namespace std;
+
+/*
+	Состояния автомата
+	S (в коде называется start)  - начальное состояние
+	A (в коде - allRight) - "правильное" состояние
+	E (в коде - error) - состояние ошибки
+	F (в коде - finish) - выход
+			  S   A   E   F
+	________________________
+рус.гласная | A | A | E |
+	________________________
+непечатные  |   |   |   |
+символы     | S | F | S |
+	________________________
+др.символы  | E | E | E |
+	________________________
+						  1
+*/
+
+
+enum symbols { russianVowel, space, other };
+enum states { start, allRight, error, finish };
+
+//таблица состояний
+void createTable(states(*table)[4])
+{
+	table[start][russianVowel] = allRight;
+	table[allRight][russianVowel] = allRight;
+	table[error][russianVowel] = error;;
+
+	table[start][space] = start;
+	table[allRight][space] = finish;
+	table[error][space] = start;
+
+	table[start][other] = error;
+	table[allRight][other] = error;
+	table[error][other] = error;
+
+}
+
+//проверка, является ли символ русской гласной буквой
+bool isRusVowel(char c)
+{
+	return (c == 'А' || c == 'Е' || c == 'Ё' || c == 'И' || c == 'О' || c == 'Э' || c == 'Ю' || c == 'Я' || c == 'Ы' || c == 'У' || c == 'а' || c == 'е' || c == 'ё' || c == 'и' || c == 'о' || c == 'э' || c == 'ю' || c == 'я' || c == 'ы' || c == 'у');
+}
+
+//проверяем, чем является введенный символ
+symbols check(char c)
+{
+	if (isRusVowel(c)) return russianVowel; // через функцию выше проверяем, гласная ли это буква
+	if (c == '\n' || c == ' ' || c == '\0') return space; // является ли непечатным символом
+	return other; // если не подошло ни под одно условие выше, то это посторонний символ
+}
+
+//функция для обработки массива слов
+void processingWord(char* str, int size, vector <char*>& result)
+{
+	states state = states::start; // текущее состояние	
+	int firstPosition = 0; // позиция начала слова;
+	states newTable[3][4];
+	createTable(newTable);
+
+	for (int position = 0; position < size; ++position) // position - это текущая позиция в строке
+	{
+		char currentSymbol = str[position];
+
+		// ищем начало слова 
+		if (state == states::start && currentSymbol != ' ') firstPosition = position;
+
+		// переход по матрице состояний
+		state = newTable[state][check(str[position])];
+
+		// запись корректного слова в выходной список
+		if (state == states::finish)
+		{
+			int length = position - firstPosition;
+			char* lexema = new char[length + 1];
+			// вычленение подстроки и запись в лексему
+			strncpy(lexema, &str[0] + firstPosition, length);
+			// постановка финализирующего 0
+			lexema[length] = '\0';
+			// запись слова в список
+			result.push_back(lexema);
+
+			state = states::start; // переводим состояние в начальное, чтобы потом начать анализ других слов
+		}
+	}
+}
+
+int main()
+{
+	ifstream fromFile("input.txt");
+	int size = 0;
+	fromFile.seekg(0, ios::end);
+	size = fromFile.tellg(); // для создания символьного массива считаем кол-во элементов в файле
+	fromFile.seekg(0, ios::beg);
+	char* str = new char[size + 1];
+	fromFile.read(&str[0], size); // чтение из файла
+	fromFile.close();
+
+	vector<char*> result;
+	processingWord(str, size + 1, result);
+
+	size = result.size(); // размер вектора, который хранит набор корректных слов
+	ofstream toFile("output.txt");
+	for (int i = 0; i < size; ++i) toFile << result[i] << " "; // вывод в файл
+
+	toFile.close();
+	delete[] str;
+	for (int i = 0; i < size; i++) delete[] result[i];
+
+	return 0;
+}
