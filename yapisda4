@@ -1,0 +1,219 @@
+#include<iostream>
+#include <fstream>
+
+using namespace std;
+
+// класс узла деревья, в нем хранится значение, указатель на левого и правого потомков
+class nodeOfTree
+{
+    int dataNode;
+    nodeOfTree* leftNode;
+    nodeOfTree* rightNode;
+public:
+    nodeOfTree(int val)
+    {
+        dataNode = val;
+        leftNode = nullptr;
+        rightNode = nullptr;
+    }
+    ~nodeOfTree()
+    {
+        leftNode = nullptr;
+        rightNode = nullptr;
+    }
+    friend class balancedBinaryTree;
+};
+
+// класс бинарного сбланасированного дерева
+class balancedBinaryTree
+{
+private:
+    nodeOfTree* treeRoot; //Корень дерева.
+public:
+    balancedBinaryTree() { treeRoot = nullptr; }
+    ~balancedBinaryTree() {
+        if (treeRoot != nullptr)
+        {
+            deleteNode(treeRoot);
+            treeRoot = nullptr;
+        }
+    }
+    void deleteNode(nodeOfTree* p) // Вспомогательная функция для деструктора
+    {
+        if (p != nullptr)
+        {
+            deleteNode(p->leftNode);
+            deleteNode(p->rightNode);
+            delete p;
+        }
+    }
+    nodeOfTree*& getTreeRoot() { return treeRoot; }
+    nodeOfTree* insertNewElem(nodeOfTree*& p, int* arr, int i, int number);
+    void removeOddElements(nodeOfTree* root, nodeOfTree* parent);
+    void preorderPrint(nodeOfTree*, ofstream&);
+};
+
+// добавление нового элемента в дерево
+nodeOfTree* balancedBinaryTree::insertNewElem(nodeOfTree*& root, int* arr, int i, int number)
+{
+    if (i < number) // Если i меньше количества элементов в массиве, то создается новый узел
+    {
+        root = new nodeOfTree{ arr[i] };
+        insertNewElem(root->leftNode, arr, 2 * i + 1, number);
+        insertNewElem(root->rightNode, arr, 2 * i + 2, number);
+    }
+    return root;
+}
+
+// функция обработки дерева согласно варианту, удаление нечетных элементов, родитель в класса не объявлен, просто при рекурсивном вызове функции
+// я передаю не только потомка узла, но и сам узел, чтобы и у него поменять указатель
+void balancedBinaryTree::removeOddElements(nodeOfTree* root, nodeOfTree* parent)
+{
+    if (root == nullptr) return;
+    removeOddElements(root->leftNode, root);
+    removeOddElements(root->rightNode, root);
+    if ((root)->dataNode % 2)
+    {
+        if (parent)
+        {
+            if (!(root)->leftNode && !(root)->rightNode)
+            {
+                // если удаляемый узел не является корневым узлом, то устанавливаем его
+                // родительский левый/правый дочерний элемент в nullptr
+                if (parent != root)
+                {
+                    // если удаляемый узел является левым потомком и у родителя есть еще правый потомок
+                    if (root == parent->leftNode && parent->rightNode)
+                    {
+                        parent->leftNode = parent->rightNode; // чтобы корректнее работал принцип приоритета влево, переносим указатель у родителя на левого потомка на его правого потомка
+                        nodeOfTree* temp = root;
+                        root = parent->rightNode; // обновляем указатель самого узла
+                        delete temp;
+                        parent->rightNode = nullptr; // обнуляем указатель
+                        removeOddElements(parent->leftNode, parent);
+                    }
+                    // если удаляемый узел является левым потомком, а правого потомка у родителя нет
+                    else if ((parent)->leftNode == root && !parent->rightNode)
+                    {
+                        //delete parent->leftNode;
+                        (parent)->leftNode = nullptr;
+                        delete root;
+                        root = nullptr;
+                    }
+                    // если удаляемый узел является правым потомком
+                    else
+                    {
+                        (parent)->rightNode = nullptr;
+                        delete root;
+                        root = nullptr;
+                    }
+                }
+                // если дерево имеет только корневой узел, устанавливаем его в nullptr
+                else
+                {
+                    delete root;
+                    root = nullptr;
+                }
+            }
+            // у узла только один потомок (по моему алгоритму он может быть только левым)
+            else if (!(root)->rightNode)
+            {
+                // если узел не корневой
+                if (parent != root)
+                {
+                    if (root == parent->rightNode) parent->rightNode = (root)->leftNode;
+                    if (root == parent->leftNode) parent->leftNode = (root)->leftNode;
+
+                    nodeOfTree* temp = root;
+                    root = root->leftNode;
+                    delete temp; // освобождаем память
+                    removeOddElements(root, parent);
+                }
+                // если корневой
+                else
+                {
+                    nodeOfTree* temp = root;
+                    parent = root->leftNode;
+                    root = root->leftNode;
+                    this->treeRoot = root;
+                    delete temp; // освобождаем память
+                    removeOddElements(root, parent);
+                }
+            }
+            // если у узла два потомка
+            else if (root->leftNode && root->rightNode)
+            {
+                if (root->leftNode)
+                {
+                    nodeOfTree* l = root, * savedParent = l;
+                    while (l->leftNode)
+                    {
+                        l->dataNode = l->leftNode->dataNode;
+                        if (!l->leftNode->leftNode) savedParent = l;
+                        l = l->leftNode;
+                    }
+                    if (savedParent->rightNode)
+                    {
+                        savedParent->leftNode = savedParent->rightNode;
+                        //nodeOfTree* temp = savedParent->rightNode;
+                        //delete savedParent->rightNode;
+                        savedParent->rightNode = nullptr;
+                        delete savedParent->rightNode;
+                    }
+                    else
+                    {
+                        delete savedParent->leftNode;
+                        savedParent->leftNode = nullptr;
+                    }
+                    removeOddElements(root, parent);
+                }
+
+            }
+        }
+    }
+
+}
+
+// вывод дерева в файл, прямой обход
+void balancedBinaryTree::preorderPrint(nodeOfTree* root, ofstream& fout)
+{
+    // условие выхода
+    if (!root)
+        return;
+    // если узел существует
+    if (root)
+    {
+        fout << root->dataNode << " "; // выводим значение узла
+        preorderPrint(root->leftNode, fout); // обходим левое поддерево
+        preorderPrint(root->rightNode, fout); // обходим правое поддерево
+    }
+}
+
+int main()
+{
+    int size = 0, i = 0;
+    int number;
+    balancedBinaryTree myBalBinTree;
+
+    // открываем файл, ищем размер, читаем данные из файла
+    ifstream fromFile("input.txt");
+    while (fromFile >> number) ++size;
+    int* t = new int[size];
+    fromFile.close();
+
+    fromFile.open("input.txt");
+    while (i < size) fromFile >> t[i++];
+    fromFile.close();
+
+    myBalBinTree.insertNewElem(myBalBinTree.getTreeRoot(), t, 0, size);
+
+    // обрабатываем дерево
+    myBalBinTree.removeOddElements(myBalBinTree.getTreeRoot(), myBalBinTree.getTreeRoot()); // два раза в вызове функции используется корень, так как алгоритм устроен так, чтобы при рекурсивном вызове функции передавался еще и предыдущий узел, чтобы и у него менять указатель
+
+    ofstream toFile("output.txt");
+    myBalBinTree.preorderPrint(myBalBinTree.getTreeRoot(), toFile);
+    toFile.close();
+
+    delete[] t;
+    return 0;
+}
