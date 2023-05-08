@@ -1,0 +1,397 @@
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <iterator>
+
+using namespace std;
+
+// класс множество
+/*
+        все элементы в множестве хранятся по возрастанию
+		конструкторы: по умолчанию, инициализации, копирования. деструктор
+		операции сравнение: > - одно множество считается больше другого, если оно является надмножеством второго множества(т.е., второе множество - подмножество первого множества)
+		< - одно множество считается меньше другого, если оно является подмножеством второго множества
+		== - ну тут понятно все, они должны быть равны
+		>= и <= - как операции > и <, только допускающие, что множества могут быть равны
+
+		методы из методички:
+		1) добавление элемента
+		2) удаление элемента происходит по значению, если данного элемента нет, то ничего не изменится
+		3) операции над множествами у меня - это сложение (тоже самое, что и объединение), вычитание (тоже самое, что и разность у множеств), умножение и деление каждого элемента на const k
+		4) проверка отношений между множества: между двумя множествами проверяется, пересекаются ли они. если множества три, то проверяется, является ли третье множество объединением/симметрической разностью двух первых множеств
+*/
+class set
+{
+	vector <double> mySet;
+public:
+
+	// конструкторы + деструктор
+
+	set() : mySet(0) {} // конструктор по умолчанию
+	set(const set& t) // конструктор копирования
+	{
+		if (t.mySet.size())
+		{
+			mySet.clear();
+			for (size_t i = 0; i < t.mySet.size(); ++i)
+				mySet.push_back(t.mySet[i]);
+		}
+
+		else mySet.clear();
+	}
+	set(vector <double>& t) // конструктор инициализации
+	{
+		if (t.size())
+		{
+			mySet.clear();
+			for (size_t i = 0; i < t.size(); ++i)
+				mySet.push_back(t[i]);
+		}
+		else mySet.clear();
+	}
+	~set() {} // деструктор
+
+	// операции сравнения двух множеств
+
+	bool operator>(const set& t); // > 
+	bool operator<(set& t); // <
+	bool operator>=(const set& t); // >=
+	bool operator<=(set& t); // <=
+	bool operator==(const set& t); // == 
+	// присваивание
+	set operator=(const set& t); // =
+
+	// методы из методички
+
+	// добавление элемента, 1й метод из методички
+	set addElem(set& t, double num);
+
+	// удаление элемента, 2й метод из методички
+	set deleteElem(double num);
+
+	// операции над множества, 3 пункт из методички
+	set operator+(const set& t); // сложение 2х множеств (тоже самое, что и объединение)
+	set operator-(const set& t); // вычитание из первого множества второго (тоже самое, что и разность множеств)
+	set operator*(int k); // умножение всех элементов множества на константу k
+	set operator/(int k); // деление всех элементов на константу k
+
+	// отношения между множествами, 4й пункт из методички
+	bool intersection(const set& t); // пересекаются ли множества
+	bool isUnion(set& t, set& v); // является ли третье множество объединением двух других множеств
+	bool isSymDiff(set& t, set& v); // является ли третье множество симметрической разностью двух других множеств
+
+	// вывод и ввод
+	friend ofstream& operator <<(ofstream& out, const set& t);
+	friend ifstream& operator >>(ifstream& out, set& t);
+
+	// мои вспомогательные методы
+	void swap(set& temp)
+	{
+		std::swap(mySet, temp.mySet);
+	}
+	void isRepeat(); // мой метод-проверка-исключение, чтобы во множестве были только уникальные элементы
+};
+
+// одно множество считается больше другого, если второе множество является подмножеством данного множества (в том числе, они не равны друг другу)
+bool set::operator>(const set& t)
+{
+	int counter = 0;
+	if (mySet.size() <= t.mySet.size()) return false; // если размер первого множества больше либо равен размеру второго, то точно первое множество не меньше
+	for (size_t i = 0; i < t.mySet.size(); ++i)
+	{
+		double num = t.mySet[i];
+		int l = 0, r = static_cast<int>(mySet.size()), mid; // левая, правая границы и середина
+		while ((l <= r)) {
+			mid = (l + r) / 2; // считываем срединный индекс отрезка [l,r]
+			if (mySet[mid] == num) ++counter; // если находится хоть один общий элемент, то множества пересекаются
+			if (mySet[mid] > num) r = mid - 1; // проверяем, какую часть нужно отбросить
+			else l = mid + 1;
+		}
+	}
+	return (counter == static_cast<int>(t.mySet.size()));
+}
+
+
+// множество считается меньше другого, если оно является подмножеством второго множества и не равно ему
+bool set::operator<(set& t)
+{
+	return t > *this;
+}
+
+// >=
+bool set::operator>=(const set& t)
+{
+	if (*this == t) return true; // вызываем операцию ==, если два множества равны, то возвращаем правду
+	else return *this > t; // если они не равны, то вызываем прописанную ранее операцию сравнения >
+}
+
+// <=
+bool set::operator<=(set& t)
+{
+	if (*this == t) return true; // вызываем операцию ==, если два множества равны, то возвращаем правду
+	else return *this < t; // если они не равны, то вызываем прописанную ранее операцию сравнения <
+}
+
+// ==
+bool set::operator==(const set& t)
+{
+	if (mySet.size() != t.mySet.size()) return false;
+	else return mySet == t.mySet;
+}
+
+// присваивание
+set set::operator=(const set& t)
+{
+	if (this != &t)
+	{
+		set myset(t);
+		swap(myset);
+	}
+	return *this;
+}
+
+// добавляем элемент к множеству
+set set::addElem(set& t, double num)
+{
+	t.mySet.push_back(num); // ну тут просто пушбэк
+	return *this;
+}
+
+// удаляем элемент по значению. если его нет в исходном множестве, то оно не меняется
+set set::deleteElem(double num)
+{
+	// через бинарный поиск ищем элемент во множестве
+	int l = 0, r = static_cast<int>(mySet.size()), mid; // левая, правая границы и середина
+	while ((l <= r)) {
+		mid = (l + r) / 2;
+		if (mySet[mid] == num) mySet.erase(mySet.begin() + mid); // если нашелся, то удаляем
+		if (mySet[mid] > num) r = mid - 1; // если в первой половине элемент
+		else l = mid + 1; // если во второй
+	}
+	return *this;
+}
+
+// операции над множествами
+
+// сложение 2х множеств
+set set::operator+(const set& t)
+{
+	for (size_t i = 0; i < t.mySet.size(); ++i) mySet.push_back(t.mySet[i]); // сначала просто 2е множество добавляем к 1му
+	isRepeat(); // удаляем повторы
+	return *this;
+}
+
+// если элементы первого множества содержатся во втором, то удаляем их. с элементами, которые есть во втором, но их нет в первом, ничего не делаем
+set set::operator-(const set& t)
+{
+	for (size_t i = 0; i < t.mySet.size(); ++i)
+	{
+		double num = t.mySet[i];
+		auto it = std::remove(mySet.begin(), mySet.end(), num);
+		mySet.erase(it, mySet.end());
+	}
+	return *this;
+}
+
+// умножение на целочисленную константу k
+set set::operator*(int k)
+{
+	for (size_t i = 0; i < mySet.size(); ++i) mySet[i] *= k;
+	return *this;
+}
+
+// деление на целочисленную константу k
+set set::operator/(int k)
+{
+	for (size_t i = 0; i < mySet.size(); ++i) mySet[i] /= k;
+	return *this;
+}
+
+// проверка отношений между множествами
+
+//пересекаются ли множества?
+bool set::intersection(const set& t)
+{
+	if (mySet.size() && t.mySet.size())
+	{
+		for (size_t i = 0; i < t.mySet.size(); ++i)
+		{
+			double num = t.mySet[i];
+			int l = 0, r = static_cast<int>(mySet.size()), mid; // левая, правая границы и середина
+			while ((l <= r)) {
+				mid = (l + r) / 2; // считываем срединный индекс отрезка [l,r]
+				if (mySet[mid] == num) return true; // если находится хоть один общий элемент, то множества пересекаются
+				if (mySet[mid] > num) r = mid - 1; // проверяем, какую часть нужно отбросить
+				else l = mid + 1;
+			}
+		}
+	}
+	return false; // если мы не вышли из цикла через правду, то, значит, одинаковых элементов нет, возвращаем ложь
+}
+
+// является ли третье множество объединением двух других множеств
+bool set::isUnion(set& t, set& v)
+{
+	set temp = t + v;
+	return temp.mySet == mySet;
+}
+
+// явояется ли третье множество симмтрической разность 2х других множеств
+bool set::isSymDiff(set& t, set& v)
+{
+	set temp = (t - v) + (v - t);
+	return temp.mySet == mySet;
+}
+
+// операторы для ввода и вывода в поток
+
+ofstream& operator<<(ofstream& out, const set& t)
+{
+	size_t i = 0;
+	while (i < t.mySet.size()) out << t.mySet[i++] << " ";
+	return out;
+}
+
+ifstream& operator>>(ifstream& in, set& t)
+{
+	double r;
+	in >> r;
+	t.mySet.push_back(r);
+	return in;
+}
+
+void set::isRepeat()
+{
+	sort(mySet.begin(), mySet.end());
+	auto last = unique(mySet.begin(), mySet.end());
+	mySet.erase(last, mySet.end());
+}
+
+void readFile(int& n, set& v, set& v2, set& v3, char * words) {
+	ifstream fromFile("input.txt");
+	fromFile >> n;
+	while (*words++ != '\n');
+	int size = 0;
+	while (*words != '\n' && *words)  if (*words++ == ' ') ++size;
+	for (int j = 0; j < size; ++j) fromFile >> v;
+	size = 0, ++*words;
+	while (*words != '\n' && *words) if (*words++ == ' ') ++size;
+	for (int j = 0; j < size; ++j) fromFile >> v2;
+	size = 0, ++*words;
+	while (*words != '\n' && *words) if (*words++ == ' ') ++size;
+	for (int j = 0; j < size; ++j) fromFile >> v3;
+	fromFile.close();
+}
+
+int main()
+{
+	set mySet, newSet, thirdSet;
+	int var = 0;
+	ifstream fromFile("input.txt", ios::binary);
+	int size = 0;
+	fromFile.seekg(0, ios::end);
+	size = fromFile.tellg();
+	fromFile.seekg(0, ios::beg);
+	char* words = new char[size + 1];
+	words[size] = '\0';
+	fromFile.read(&words[0], size); // чтение из файла
+	fromFile.close();
+	readFile(var, mySet, newSet, thirdSet, words);
+
+	mySet.isRepeat(), newSet.isRepeat(), thirdSet.isRepeat();
+
+	ofstream fout("output.txt");
+	switch (var) // ну тут просто вызывается метод в зависимости от варианта
+	{
+	case(1): { // конструктор копирования
+		set copySet(mySet);
+		fout << copySet;
+		break;
+	}
+	case(2): { // конструктор инициализации
+		vector <double> v{ 2, 3, 4, 5 };
+		set initSet(v);
+		fout << initSet;
+		break;
+	}
+	case(3): { // операция присваивания
+		set newSet = mySet;
+		fout << newSet;
+		break;
+	}
+	case(4): { // добавляение, 1й метод из методички
+		int num = 41;
+		mySet.addElem(mySet, num);
+		mySet.isRepeat();
+		fout << mySet;
+		break;
+	}
+	case(5): { // удаление элемента по значению, 2й метод из методички
+		mySet.deleteElem(29);
+		fout << mySet;
+		break;
+	}
+		   // операции над множества
+	case(6): { // сложение 2х множеств
+		set sumSet = mySet + newSet;
+		fout << sumSet;
+		break;
+	}
+	case(7): { // разность 2х множеств
+		set razSet = mySet - newSet;
+		fout << razSet;
+		break;
+	}
+	case(8): { // умножение элементов на константу k
+		int k = 5;
+		mySet = mySet * k;
+		fout << mySet;
+		break;
+	}
+	case(9): { // деление элементов на константу k
+		int k = 5;
+		mySet = mySet / k;
+		fout << mySet;
+		break;
+	}
+		   // отношения между множествами
+	case(10): { // пересекаются ли
+		if (mySet.intersection(newSet)) fout << "Множества пересекаются";
+		else fout << "Множества не пересекаются";
+		break;
+	}
+	case(11): { // является ли третье множество объединением двух предыдущих
+		if (thirdSet.isUnion(mySet, newSet)) fout << "Третье множество является объединением";
+		else fout << "Третье множество не является объединением";
+		break;
+	}
+	case(12): { // является ли третье множество симметрической разностью двух других множеств
+		if (thirdSet.isSymDiff(mySet, newSet)) fout << "Третье множество является симметрической разностью";
+		else fout << "Третье множестов не является симмерической разностью";
+		break;
+	}
+			// операции сравнения
+	case(13): { // первое множество меньше второго?
+		fout << (mySet < newSet);
+		break;
+	}
+	case(14): { // первое множество больше второго?
+		fout << (mySet > newSet);
+		break;
+	}
+	case(15): { // равны ли множества?
+		fout << (mySet == newSet);
+		break;
+	}
+	case(16): { // <=
+		fout << (mySet <= newSet);
+		break;
+	}
+	case(17): { // >=
+		fout << (mySet >= newSet);
+	}
+	}
+	fout.close();
+	delete[] words;
+	return 0;
+}
