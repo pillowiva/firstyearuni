@@ -1,0 +1,71 @@
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <cctype>
+#include <string>
+
+using namespace std;
+
+string Format(string entry)
+{
+	int size = entry.length();
+
+	for (int chr = 0; chr < size; chr++)
+	{
+		if (isdigit(entry[chr])) entry[chr] = ' ';
+		if (isupper(entry[chr])) entry[chr] = tolower(entry[chr]);
+		if (ispunct(entry[chr])) entry[chr] = ' ';
+	}
+	entry.erase(remove(entry.begin(), entry.end(), ' '), entry.end());
+	return entry;
+}
+void inputAndReading(string entry, ifstream& fin)
+{
+	cin >> entry;
+	fin.open(entry, ios_base::in);
+	while (!fin.is_open())
+	{
+		cout << "Error! File cannot be open. Try again: ";
+		cin >> entry;
+		fin.open(entry, ios_base::in);
+	}
+}
+void keepWord(ifstream& fin, map<string, int>& m, string w, string w2)
+{
+	while (fin >> w)
+	{
+		w2 = Format(w);
+		m[w2] += 1;
+	}
+}
+void mostPopularWord(map<string, int> m, map <int, string>& m2)
+{
+	for (map<string, int>::iterator it = m.begin(); it != m.end(); ++it) m2[it->second] = it->first;
+	map<int, string>::iterator it = --m2.end();
+	cout << "Most popular word: " << it->second << ' ';
+}
+int main()
+{
+	cout << "Most popular word in a file.\n";
+
+	ifstream fin;
+	map <string, int> words;
+	map<int, string> words2;
+	string word, word2, nameOfFile;
+	int y = 1;
+
+	while (y == 1)
+	{
+		cout << "\nInput a filename: ";
+		inputAndReading(nameOfFile, fin);
+		keepWord(fin, words, word, word2);
+		mostPopularWord(words, words2);
+
+		fin.close();
+		words.clear();
+		words2.clear();
+		
+		cout << "\nDo you want to continue? Enter 1, if you want. Another symbol, if you don't want: ";
+		cin >> y;
+	}
+}
