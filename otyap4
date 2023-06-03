@@ -1,0 +1,320 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <cstring>
+
+using namespace std;
+
+enum synthStates { st, ard, aru, arl, arc, aro, aro1, aro2, are, end1, err }; // состояния для матрицы синтаксического анализатора
+enum lexStates { s, a, b, c, d, e, ar, g, i, cd, fa, fb, fc, fd, fe, far, fg, f }; // состояния для матрицы лексического анализатора
+const char* types[] = { "do", "id", "vl", "co", "ao", "eq", "wl", "un", "lp" };
+// типы лексем - ключевые слова, идентификаторы, числовые константы, сравнительные операции, арифметические операции, равно, некорректные лексемы
+
+// структура лексемы
+struct  Lex
+{
+    char* word;
+    const char* type; // это костыльчик 
+    int synthtype; // который мне лень переделывать >.<
+};
+
+// матрица состояний для определения типов лексем
+lexStates matrixlex[8][17] // матрица состояний
+{
+    // 0    1    2    3    4    5    6    7    8    9   10 11  12 13 14 15  16
+    // S    A    B    C    D    E    Ar   G    I    cd  fA fB  fC fD fE fAr fG
+    /*0*/ a,   a,   g,   fa,  fa,  fa,  fa,  g,   i,   fa,  a, b,  c, d, e, ar, g,  // буквы
+    /*1*/ b,   i,   b,   fb,  fb,  fb,  fb,  g,   i,   fb,  a, b,  c, d, e, ar, g,  // цифры
+    /*2*/ fc,  fc,  fc,  fc,  fc,  fc,  fc,  fc,  fc,  fc,  a, b,  c, d, e, ar, g,  // <
+    /*3*/ fd,  fd,  fd,  cd,  fd,  fd,  fd,  fd,  fd,  fd,  a, b,  c, d, e, ar, g,  // >
+    /*4*/ fe,  fe,  fe,  cd,  cd,  fe,  fe,  fe,  fe,  fe,  a, b,  c, d, e, ar, g,  // =
+    /*5*/ far, far, far, far, far, far, far, far, far, far, a, b,  c, d, e, ar, g,  // + и -
+    /*6*/ s,   f,   f,   f,   f,   f,   f,   f,   f,   f,   a, b,  c, d, e, ar, g,  // символы выхода
+    /*7*/ g,   g,   g,   fg,  fg,  fg,  fg,  g,   g,   fg,  a, b,  c, d, e, ar, g,  // мусор
+};
+
+// матрица для анализа корректности конструкции
+const int matrixsynth[9][9]{
+    //     0    1    2    3     4    5     6     7     8         
+    //     S    ard  aru  arl   arc  aro   aro1  aro2  are   
+    /*0*/ {ard, err, err, err,  err, err,  err,  err,  err }, // do 
+    /*1*/ {err, err, arl, aro1, aro, aro1, err,  are,  err},  // id
+    /*2*/ {err, err, arl, err,  aro, err,  err,  are,  err }, // vl
+    /*3*/ {err, err, err, arc,  err, err,  err,  err,  err},  // co
+    /*4*/ {err, err, err, err,  err, err,  err,  err,  aro2}, // ao
+    /*5*/ {err, err, err, err,  err, err,  aro2, err,  err},  // eq
+    /*6*/ {err, err, err, err,  err, err,  err,  err,  err},  // wl
+    /*7*/ {err, aru, err, err,  err, err,  err,  err,  err},  // until
+    /*8*/ {err, err, err, err,  err, err,  err,  err,  end1}, // loop
+};
+
+
+// является ли идентификатор ключевым словом?
+bool checkKW(char* lexem)
+{
+    return (!strcmp(lexem, "do") || !strcmp(lexem, "until") || !strcmp(lexem, "loop")); // strcmp() возвращает 0 если строки равны
+};
+
+// определяем тип лексемы
+void whatType(lexStates state, Lex& lexem) // получаем тип лексемы по состоянию 
+{
+    if (state == lexStates::i) {
+        size_t size = strlen(lexem.word); // 
+        if (size > 5)
+        {
+            lexem.type = types[6];
+            lexem.synthtype = 6;
+        }
+        else
+        {
+            lexem.type = types[1];
+            lexem.synthtype = 1;
+        }
+    }
+    else
+    {
+        if (state == lexStates::a) // если лексема только из букв
+        {
+            if (checkKW(lexem.word)) // если это ключевое слово
+            {
+                if (!strcmp(lexem.word, "do")) { lexem.type = types[0];  lexem.synthtype = 0; }
+                if (!strcmp(lexem.word, "until")) { lexem.type = types[7];  lexem.synthtype = 7; }
+                if (!strcmp(lexem.word, "loop")) { lexem.type = types[8];  lexem.synthtype = 8; }
+            }
+            else { // если нет - это может быть или идентификатор, или мусор, если его длина >5
+                size_t size = strlen(lexem.word);
+                if (size > 5)
+                {
+                    lexem.type = types[6]; // мусор
+                    lexem.synthtype = 6;
+                }
+                else
+                {
+                    lexem.type = types[1]; // идентификатор
+                    lexem.synthtype = 1;
+                }
+            }
+        }
+        else if (state == lexStates::b) // если только цифры
+        {
+            if (atoi(lexem.word) > 32768 || atoi(lexem.word) < -32767)
+            {
+                lexem.synthtype = 6;
+                lexem.type = types[6];
+            }
+            else
+            {
+                lexem.type = types[2];
+                lexem.synthtype = 2;
+            }
+        }
+        else if (state == lexStates::c) // если <
+        {
+            lexem.type = types[3];
+            lexem.synthtype = 3;
+        }
+        else if (state == lexStates::d) // если >
+        {
+            lexem.type = types[3];
+            lexem.synthtype = 3;
+        }
+        else if (state == lexStates::e) // если =
+        {
+            lexem.type = types[5];
+            lexem.synthtype = 5;
+        }
+        else if (state == lexStates::ar) // если + или -
+        {
+            lexem.type = types[4];
+            lexem.synthtype = 4;
+        }
+        else if (state == lexStates::cd) // если <> <= >=
+        {
+            lexem.type = types[3];
+            lexem.synthtype = 3;
+        }
+        else if (state == lexStates::g) // если мусор
+        {
+            lexem.type = types[6];
+            lexem.synthtype = 6;
+        }
+    }
+}
+
+// сохраняем лексему в вектор 
+void saveLex(int cur_pos, int& first_pos, vector<Lex>& res, char*& text, lexStates state)
+{
+    Lex lexem;
+    int length = cur_pos - first_pos; // вычисляем длину слова
+    lexem.word = new char[length + 1]; // выделяем место под слово
+    strncpy(&lexem.word[0], &text[0] + first_pos, length); // копируем слово из текста
+    lexem.word[length] = '\0'; // ставим закрывающий символ
+    whatType(state, lexem);
+    res.push_back(lexem);
+    first_pos = cur_pos;
+}
+
+// файл для вывода, делаем здесь глобальным, тк в 4 из 5 функций будет происходить вывод в файл, а передавать каждый раз мне стало чета лень
+ofstream FOUT("output.txt");
+
+// лексический анализатор 
+void lexAnalysis(char* text, vector <Lex>& res) // лексический анализатор
+{
+    int curPos = 0; // текущая позиция в файле
+    lexStates state = lexStates::s; // устанавливаем изначальное состояние
+    lexStates prevState;
+    int size = strlen(text);
+    int firstPos;
+    int end = size + 1;
+
+    while (curPos != end)
+    {
+        prevState = state;
+        char curChar = text[curPos];
+
+        if (state == lexStates::s && curChar != ' ' && curChar != '\t' && curChar != '\n' && curChar != '\r' && curChar != '\0') firstPos = curPos;
+
+        // обновляем состояния
+        if (isalpha(curChar)) state = matrixlex[0][state];
+        else if (isdigit(curChar)) state = matrixlex[1][state];
+        else if (curChar == '<') state = matrixlex[2][state];
+        else if (curChar == '>') state = matrixlex[3][state];
+        else if (curChar == '=') state = matrixlex[4][state];
+        else if (curChar == '+' || curChar == '-') state = matrixlex[5][state];
+        else if (curChar == ' ' || curChar == '\t' || curChar == '\n' || curChar == '\r' || curChar == '\0') state = matrixlex[6][state];
+        else state = matrixlex[7][state];
+
+        if (state == f)
+        {
+            saveLex(curPos, firstPos, res, text, prevState);
+            state = lexStates::s;
+        }
+        // запись предшествующей лексемы, состояние не меняется
+        if (state == c || state == d || state == e || state == ar) saveLex(curPos, firstPos, res, text, prevState);
+
+        else if (state == fa || state == fb || state == fc || state == fd || state == fe || state == far || state == fg) // выходы с обозначением следующего состояния
+        {
+            if (prevState != s) saveLex(curPos, firstPos, res, text, prevState);
+            state = matrixlex[0][state];
+        }
+        ++curPos;
+    }
+}
+
+// функция обработки минуса, чтобы могли существовать отрицательные константы
+void separateMinus(vector<Lex>& v)
+{
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        // минус как часть лексемы считается в таком случае:
+        // перед нами минус, следующая лексема - const(vl)
+        // а предыдущая лексема либо until(un), операция сравнения(co), либо =(eq)
+        if (!strcmp(v[i].word, "-") && i + 1 < v.size() && (v[i + 1].synthtype == 2) && i) 
+        {
+            if (v[i - 1].synthtype == 7 || v[i - 1].synthtype == 3 || v[i - 1].synthtype == 5)
+            {
+                // ну а тут танцы с бубном, меняем тип лексемы, все сохраняем и обновляем размер вектора и живем
+                Lex lexem;
+                lexem.word = new char[sizeof(v[i + 1]) + 1];
+                lexem.word[0] = '-';
+                strncpy(&lexem.word[1], v[i + 1].word, sizeof(v[i + 1]));
+                v[i].type = types[v[i + 1].synthtype];
+                v[i].synthtype = v[i+1].synthtype;
+                v[i].word = lexem.word;
+                for (size_t j = i + 1; j < v.size() - 1; ++j)
+                {
+                    v[j] = v[j + 1];
+                    v[j].type = types[v[j + 1].synthtype];
+                    v[j].synthtype = v[j + 1].synthtype;
+                }
+                v.pop_back();
+            }
+        }
+
+    }
+}
+
+// вывод ошибки, результат работы синтаксического анализатора
+void printSynthError(int state)
+{
+    // смотрим, какие типы могли бы быть вместо ошибки
+    int* arrTypes; // в массиве будут номера возможных типов
+    int m = 0, n = 0;
+    for (int i = 0; i < 9; ++i) if (matrixsynth[i][state] != err) ++m; // ищем количество правильных исходов
+    arrTypes = new int[m]; // создаём массив с найденым размером
+    for (int i = 0; i < 9; ++i) // ну тут приходится опять идти по столбцу состояний, только на этот раз мы правильные состояния сохраняем в массив
+    {
+        if (matrixsynth[i][state] != err)
+        {
+            arrTypes[n] = i;
+            ++n; // проход по массиву
+        }
+    }
+    if (arrTypes[0] == 1 && arrTypes[1] == 3) swap(arrTypes[0], arrTypes[1]); // если у нас на месте ошибки должна было быть либо co, либо id
+                                                                              // то меняем их в векторе местами, чтобы сохранить лексикографический порядок
+    for (int i = 0; i < m; ++i) FOUT << types[arrTypes[i]] << " "; // выводим типы в соответствии с номером
+    delete[] arrTypes; // очищаем памяять
+}
+
+// синтаксический анализатор
+void synthAnalysis(vector<Lex>& v)
+{
+    int curState = st, prevState; // текущее состояние + предыдущее
+    for (size_t i = 0; i < v.size(); ++i)  // начинаем ходить по вектору лексем
+    {
+        if (curState != err) // после ошибки заканчиваем ходить
+        {
+            prevState = curState; // сохраняем предыдущее состояние
+            curState = matrixsynth[v[i].synthtype][curState]; // ставим новое
+            if (curState == end1) // если дошли до корректного конца
+            {
+                if (i != v.size() - 1) curState = s; // если ещё есть конструкия, идём дальше
+                else FOUT << "OK"; // ну если все хорошо и ничего больше нет, то выводим ОК
+            }
+            else if ((i == v.size() - 1 && curState != end1) || (curState == err)) // конструкция правильная но не дошла до конца или есть ошибка
+            {
+                curState == err ? FOUT << i << " " : FOUT << i + 1 << " "; // выводим место ошибки (если не ошибочное состояние, то ошибка дальше)
+                if (curState == err) printSynthError(prevState); // залезаем в функцию поиска нужных типов
+                else printSynthError(curState); // ну тут опять залезаем в функцию для поиска типов, которые должны были быть на это месте
+            }
+        }
+    }
+}
+
+// вывод результата работы лексического анализатора
+void printLexResult(vector<Lex>& res)
+{
+    size_t j = res.size();
+    for (size_t i = 0; i < j; ++i) FOUT << res[i].word << '[' << res[i].type << "] ";
+    FOUT << endl;
+}
+
+int main()
+{
+    ifstream FIN("input.txt");
+    int size = 0;
+    FIN.seekg(0, ios::end); // находим количество символов в файле
+    size = FIN.tellg();
+    FIN.seekg(0, ios::beg);
+    if (size)
+    {
+        char* text = new char[size + 1]; // выделяем массив соответствующего размера
+        FIN.read(&text[0], size + 1); // считываем данные из файла в массив
+        text[size] = '\0'; // ставим нехначащий 0 в конец
+        FIN.close(); // закрываем входной файл
+
+        vector <Lex> result;
+        lexAnalysis(text, result); // приступаем к лексическому анализу
+        separateMinus(result); // функция, которая позволяет жить отрицательным константам как vl, а не ao+vl
+        printLexResult(result); // печатаем результат работы лексического анализтора
+        synthAnalysis(result); // приступаем к синтаксическому анализу, функция печати будет там же вызываться
+
+        // очищаем память
+        for (size_t i = 0; i < result.size(); ++i) delete[] result[i].word;
+        delete[] text;
+    }
+    else FOUT << "0 do"; // если файлик пустой, то выводи ошибку, тк ждали do
+    FOUT.close();
+    return 0;
+}
