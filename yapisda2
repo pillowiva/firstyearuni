@@ -1,0 +1,46 @@
+#include <iostream>
+#include <fstream>
+
+using namespace std;
+
+void procedureMatrix(long double* mas, int size, long double* &mas1)
+{
+	int masSize = mas[0] * mas[1] + 2, start = 2, end = mas[1] + 2, j = 0;
+	long double sr = 0;
+while(start < masSize)
+	{
+		while (start < end) sr += mas[start++];
+		sr /= mas[1];
+		mas1[j++] = sr;
+		start = end;
+		end = start + mas[1];
+		sr = 0;
+	}
+}
+
+int main()
+{
+	double num;
+	int masSize = 0;
+	ifstream fromFile("input.txt");
+	ofstream toFile("output.txt");
+
+	while (fromFile >> num) masSize++;
+	fromFile.close();
+	long double* mas = new long double[masSize];
+
+	fromFile .open("input.txt");
+	for (int i = 0; i < masSize; ++i) fromFile >> mas[i];
+	fromFile.close();
+	int size = mas[0];
+
+	long double* mas1 = new long double[size];
+	procedureMatrix(mas, size, mas1);
+	for (int i = 0; i < mas[0]; ++i) toFile << mas1[i] << " ";
+
+	toFile.close();
+	delete[] mas;
+	delete[]mas1;
+
+	return 0;
+}
