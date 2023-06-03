@@ -1,0 +1,541 @@
+#include <fstream>
+#include <vector>
+#include <cstring>
+#include <ctype.h>
+
+using namespace std;
+
+const char* types[] = { "kw","co","eq","ao","sc","vl","id","wl" };
+enum states { S, L, N, AO, EQ, COM, COL, SP, OT, AOOT, EQQOT, COMMOT, COLLOT, SSL, SSN, SSAO, SSEQ, SSCOM, SSCOL, SSOT, SL, SN, SCOM, SCOL, SOT, NLAO, NNS, AOS, EQS, NLEQ, NLCOM, NLCOL, NLS, NNAO, NNEQ, NNCOL, NNCOM, AONL, AON, AOAO, AOEQ, AOCOM, AOCOL, SAO, AOT, EQL, EQN, EQAO, EQEQ, EQCOM, EQCOL, SEQ, EQOT, COML, COMN, COMAO, COMEQ, COMCOM, COMCOL, COMS, COMOT, COLL, COLN, COLAO, COLEQ, COLCOM,COLCOL, COLSP, COLOT};
+
+states matrix[8][9]
+{
+        // S - начальное состояние
+        // L - состояние буквы
+        // N - состояние цифры
+        // AO - состояние арифметических операций(+/-)
+        // EQ - состояние "равно" (=)
+        // COM - состояние ">"
+        // COL - состояние "<" 
+        // SP - состояние пустоты
+        // OT - состояние мусора
+
+ 
+        // S         L         N         AO        EQ        COM        COL         SP       OT
+          SSL,      L,        OT,       NLAO,     NLEQ,     NLCOM,     NLCOL,      NLS,     OT,      // буквы
+          SSN,      L,        N,        NNAO,     NNEQ,     NNCOM,     NNCOL,      NNS,     OT,      // цифры
+          SSAO,     AONL,     AON,      AOAO,     AOEQ,     AOCOM,     AOCOL,      AOS,     AOT,     // +/-
+          SSEQ,     EQL,      EQN,      EQAO,     EQEQ,     EQCOM,     EQCOL,      EQS,     EQOT,    // =
+          SSCOM,    COML,     COMN,     COMAO,    COMEQ,    COMCOM,    COMCOL,     COMS,    COMOT,   // >
+          SSCOL,    COLL,     COLN,     COLAO,    COLEQ,    COLCOM,    COLCOL,     COLSP,   COLOT,   // <
+          S,        SL,       SN,       SAO,      SEQ,      SCOM,      SCOL,       S,       SOT,     // символы пустоты
+          SSOT,     OT,       OT,       AOOT,     EQQOT,    COMMOT,    COLLOT,     SSOT,    OT,      // всякий мусор
+};
+
+// структура лексемы, хранит в себе само слово и его тип 
+struct lexema
+{
+    int typeOfLexema;
+    char* Lexema;
+};
+
+// функция чтения данных из файла
+char* inputFromFile()
+{
+    ifstream fromFile("input.txt", ios::binary);
+    fromFile.seekg(0, ios::end);
+    int size = fromFile.tellg();
+    fromFile.seekg(0, ios::beg);
+    char* text = new char[size + 1];
+    fromFile.read(&text[0], size);
+    text[size] = '\0';
+    fromFile.close();
+    return text;
+}
+
+// функиця проверки, является ли строка ключевым словом, ключевые слова: do, until, loop
+int isKeyWord(const char* const str)
+{
+    if (!strcmp(str, "do")) return 0;
+    if (!strcmp(str, "until")) return 0;
+    if (!strcmp(str, "loop")) return 0;
+    return 6;
+}
+
+// функция для сохранения лексемы в вектор
+void saveWordAfterParser(vector<lexema>& v, const char* const text, int firstPos, int lastPos, int type)
+{
+    lexema newLex;
+    newLex.Lexema = new char[lastPos - firstPos + 1];
+    for (size_t i = firstPos; i < (size_t)lastPos; ++i) newLex.Lexema[i - firstPos] = text[i];
+
+    newLex.Lexema[lastPos - firstPos] = '\0';
+    if (type == 6)  // проверяем, является ли слово идентификатором
+    {
+        newLex.typeOfLexema = isKeyWord(newLex.Lexema); // сама проверка
+        if (newLex.typeOfLexema && (lastPos - firstPos > 5)) newLex.typeOfLexema = 7;  // если НЕ ключевое слово и длина больше 5, то wl
+    }
+    else if (type == 5) { (atoi(newLex.Lexema) > 32767) ? newLex.typeOfLexema = 7 : newLex.typeOfLexema = 5; } // если id больше диапазона, то wl
+    else newLex.typeOfLexema = type;
+    v.push_back(newLex);
+}
+
+// функиця возвращает номер строки в матрице состояний
+size_t whatLine(char c)
+{
+    if (isalpha(c)) return 0;
+    if (isdigit(c)) return 1;
+    if (c == '+' || c == '-') return 2;
+    if (c == '=') return 3;
+    if (c == '>') return 4;
+    if (c == '<') return 5;
+    if (isspace(c) || iscntrl(c)) return 6;
+    return 7;
+}
+
+// анализатор текста
+void parser(const char* const text, vector<lexema>& result)
+{
+    int position = 0;    // индекс текущего символа из текста
+    states state = states::S;  // начальное состояние - S
+    int firstPos = -1;
+    do {
+        char currentChar = text[position];   // текущий символ запоминаем
+        state = matrix[whatLine(currentChar)][state];  // меняем состояние
+
+        if (state == states::L) // собираем буквы
+        {
+            state = L;
+        }
+        else if (state == states::OT) // фиксируем состояние ошибки
+        {
+            state = OT;
+        }
+        else if (state == states::NLAO) // если встретилась буква, а до нее была арифм.операция (+/-)
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            firstPos = position;
+            state = L;
+        }
+        else if (state == states::NLEQ) // если встретилась буква, а до нее было =
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            firstPos = position;
+            state = L;
+        }
+        else if (state == states::NLCOM) // если встретилась буква, а до нее было >
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            firstPos = position;
+            state = L;
+        }
+        else if (state == states::NLCOL) // если встретилась буква, а до нее было <
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            firstPos = position;
+            state = L;
+        }
+        else if (state == states::NLS) // если встретилась буква, а до нее ничего не было
+        {
+            firstPos = position;
+            state = L;
+        }
+
+        // встретилась цифры, рассматриваем разные ситуации, при которых она могла встретиться, лексему до цифры отделяем и сохраняем
+        else if (state == states::N) // если до этого тоже были цифры
+        {
+            state = N;
+        }
+        else if (state == states::NNAO) // если до этого была арифм.операция
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            firstPos = position;
+            state = N;
+        }
+        else if (state == states::NNEQ) // если до этого было =
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            firstPos = position;
+            state = N;
+        }
+        else if (state == states::NNCOL) // если до этого было <
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            firstPos = position;
+            state = N;
+        }
+        else if (state == states::NNCOM) // если до этого было >
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            firstPos = position;
+            state = N;
+        }
+        else if (state == states::NNS) // если до этого ничего не было
+        {
+            firstPos = position;
+            state = N;
+        }
+
+        // разделительный символ - арифм.операция(+/-), отделяем получившуюся до него лексему и сохраняем ее
+        else if (state == states::AONL) // до арифм.операции были буквы
+        {
+            saveWordAfterParser(result, text, firstPos, position, 6);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AON) // до арифм.операции были цифры
+        {
+            saveWordAfterParser(result, text, firstPos, position, 5);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOAO) // до арифм.операции была арифм.операция
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOEQ) // до арифм.операции было =
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOCOM) // до арифм.операции было >
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOCOL) // до арифм.операции было <
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOS) // до арифм.операции ничего не было
+        {
+            state = AO;
+            firstPos = position;
+        }
+        else if (state == states::AOT) // до арифм.операции был мусор
+        {
+            saveWordAfterParser(result, text, firstPos, position, 7);
+            state = AO;
+            firstPos = position;
+        }
+
+        // разделительный символ =, отделяем получившуюся до него лексему и сохраняем ее
+        else if (state == states::EQL) // до = были буквы
+        {
+            saveWordAfterParser(result, text, firstPos, position, 6);
+            state = EQ;
+            firstPos = position;
+        }
+        else if (state == states::EQN) // до = были цифры
+        {
+            saveWordAfterParser(result, text, firstPos, position, 5);
+            state = EQ;
+            firstPos = position;
+        }
+        else if (state == states::EQAO) // до = была арифм.операция (+/-)
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = EQ;
+            firstPos = position;
+        }
+        else if (state == states::EQEQ) // до = было равно
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = EQ;
+            firstPos = position;
+        }
+        else if (state == states::EQCOM) // до = было >, рассматриваем случай >=
+        {
+            saveWordAfterParser(result, text, firstPos, position + 1, 1);
+            state = S;
+            firstPos = position + 2;
+        }
+        else if (state == states::EQCOL) // до = было <, рассматриваем случай <=
+        {
+            saveWordAfterParser(result, text, firstPos, position + 1, 1);
+            state = S;
+            firstPos = position + 2;
+        }
+        else if (state == states::EQS) // до = была пустота
+        {
+            state = EQ;
+            firstPos = position;
+        }
+        else if (state == states::EQOT) // до = был мусор
+        {
+            saveWordAfterParser(result, text, firstPos, position, 7);
+            state = EQ;
+            firstPos = position;
+        }
+
+        // разделительный символ >, отделяем получившуюся лексему и сохраняем ее
+        else if (state == states::COML) // до > были буквы
+        {
+            saveWordAfterParser(result, text, firstPos, position, 6);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMN) // до > были цифры
+        {
+            saveWordAfterParser(result, text, firstPos, position, 5);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMAO) // до > была арифм.операция (+/-)
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMEQ) // до > было =
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMCOM)
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMCOL) // до > был <, рассматриваем случай <>
+        {
+            saveWordAfterParser(result, text, firstPos, position + 1, 1);
+            state = S;
+            firstPos = position;
+        }
+        else if (state == states::COMS) // до > была пустота
+        {
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COMOT) // до > был мусор
+        {
+            saveWordAfterParser(result, text, firstPos, position, 7);
+            state = COM;
+            firstPos = position;
+        }
+
+        // разделительный символ <, отделяем получившуюся до этого лексему и сохраняем ее 
+        else if (state == states::COLL) // до < были буквы
+        {
+            saveWordAfterParser(result, text, firstPos, position, 6);
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLN) // до < были цифры
+        {
+            saveWordAfterParser(result, text, firstPos, position, 5);
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLAO)  // до < была арифм.операция(+/-)
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLEQ) // до < было =
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLCOM) // до < было >
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = COM;
+            firstPos = position;
+        }
+        else if (state == states::COLCOL) // до < было <
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLSP) // до < был пробел
+        {
+            state = COL;
+            firstPos = position;
+        }
+        else if (state == states::COLOT) // до < был мусор
+        {
+            saveWordAfterParser(result, text, firstPos, position, 7);
+            state = COL;
+            firstPos = position;
+        }
+
+        // рассматриваем начальные состояние
+        else if (state == states::SSL) // буква в начале
+        {
+            firstPos = position;
+            state = L;
+        }
+        else if (state == states::SSN) // цифра в начале
+        {
+            firstPos = position;
+            state = N;
+        }
+        else if (state == states::SSAO) // +-  в начале
+        {
+            firstPos = position;
+            state = AO;
+        }
+        else if (state == states::SSEQ) // =  в начале
+        {
+            firstPos = position;
+            state = EQ;
+        }
+        else if (state == states::SSCOM) // > в начале
+        {
+            firstPos = position;
+            state = COM;
+        }
+        else if (state == states::SSCOL) // < в начале
+        {
+            firstPos = position;
+            state = COL;
+        }
+        else if (state == states::SSOT) // мусор в начале
+        {
+            firstPos = position;
+            state = OT;
+        }
+
+        // разделительный символ пробел появляется, определяем тип лексемы до пробела
+        else if (state == states::SL) // пробел после буквы
+        {
+            saveWordAfterParser(result, text, firstPos, position, 6);
+            state = S;
+        }
+        else if (state == states::SN) // пробел после цифры
+        {
+            saveWordAfterParser(result, text, firstPos, position, 5);
+            state = S;
+        }
+        else if (state == states::SAO) // пробел после +- 
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = S;
+        }
+        else if (state == states::SEQ) // пробел после = 
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = S;
+        }
+        else if (state == states::SCOM) // пробел после >
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = S;
+        }
+        else if (state == states::SCOL) // пробел после <
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = S;
+        }
+
+        // появляется символ после неправильного состояние - сохраняем неправильную лексему
+        else if (state == states::SOT) // пробел после мусора
+        {
+            saveWordAfterParser(result, text, firstPos, position, 7);
+            state = S;
+        }
+        else if (state == states::AOOT) // +- после мусора
+        {
+            saveWordAfterParser(result, text, firstPos, position, 3);
+            state = OT;
+            firstPos = position;
+        }
+        else if (state == states::EQQOT) // = после мусора
+        {
+            saveWordAfterParser(result, text, firstPos, position, 2);
+            state = OT;
+            firstPos = position;
+        }
+        else if (state == states::COMMOT) // > после мусора
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = OT;
+            firstPos = position;
+        }
+        else if (state == states::COLLOT) // < после мусора
+        {
+            saveWordAfterParser(result, text, firstPos, position, 1);
+            state = OT;
+            firstPos = position;
+        }
+
+    } while (text[position++] != '\0');
+}
+
+// вывод данных в файл
+void printToFile(vector<lexema>& vec)
+{
+    ofstream toFile("output.txt");
+    if (vec.empty()) {
+        toFile << "";
+    }
+    else {
+        bool flag = false; // флаг для проверки, был ли выведен хотя бы один элемент в цикле
+        bool flag1 = false;
+
+        for (unsigned int i = 0; i < vec.size(); ++i) {
+            toFile << vec[i].Lexema << '[' << types[vec[i].typeOfLexema] << ']'; // запись ответа
+            if (i != vec.size() - 1) { // если это не последний элемент, то выводим пробел
+                toFile << ' ';
+            }
+            if (vec[i].typeOfLexema == 6 || vec[i].typeOfLexema == 5) {
+                flag1 = true;
+            }
+        }
+        if (flag1) { // если будет выведен хотя бы один элемент, то делаем перевод строки
+            toFile << endl;
+        }
+
+        flag1 = false; // обнуляем флаг
+        for (unsigned int g = 0; g < vec.size(); ++g) { // вывод идентификаторов
+            if (vec[g].typeOfLexema == 6) {
+                if (flag) { // если уже был выведен хотя бы один элемент, то выводим пробел перед текущим элементом
+                    toFile << ' ';
+                }
+                toFile << vec[g].Lexema;
+                flag = true;
+            }
+            if (vec[g].typeOfLexema == 5) {
+                flag1 = true;
+            }
+        }
+        if (flag1) { // если будет выведен хотя бы один элемент, то делаем перевод строки
+            toFile << endl;
+        }
+
+        flag = false; // обнуляем флаг
+        for (unsigned int l = 0; l < vec.size(); ++l) { // вывод констант
+            if (vec[l].typeOfLexema == 5) {
+                if (flag) { // если уже был выведен хотя бы один элемент, то выводим пробел перед текущим элементом
+                    toFile << ' ';
+                }
+                toFile << vec[l].Lexema;
+                flag = true;
+            }
+        }
+    }
+}
+
+int main()
+{
+    char* text = inputFromFile();
+    vector<lexema> vectorLexems;
+    parser(text, vectorLexems);
+    printToFile(vectorLexems);
+    for (size_t i = 0; i < vectorLexems.size(); ++i) delete vectorLexems[i].Lexema;
+    delete[] text;
+    return 0;
+}
