@@ -1,0 +1,61 @@
+#include <iostream>
+
+using namespace std;
+
+double check()
+{
+    double x;
+    while (!(cin >> x) || (cin.peek() != '\n'))
+    {
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Wrong value! Try again: ";
+    }
+    return x;
+}
+struct vertexCoordinates
+{
+    double x, y;
+    void insert()
+    {
+        cout << "X: ";
+        x = check();
+        cout << "Y: ";
+        y = check();
+    }
+};
+double stor(vertexCoordinates a, vertexCoordinates b, vertexCoordinates c)
+{
+    return (a.x - b.x) * (c.x - b.x) + (a.y - b.y) * (c.y - b.y);
+}
+void printFourthVertex(vertexCoordinates a, vertexCoordinates b, vertexCoordinates c)
+{
+    cout << "Coordinates of the 4th vertex: " << (c.x + a.x - b.x) << ", " << (c.y + a.y - b.y);
+}
+bool checkVertex(vertexCoordinates a, vertexCoordinates b, vertexCoordinates c)
+{
+    return ((a.x == b.x == c.x) || (a.y == b.y == c.y));
+}
+int main()
+{
+    cout << "Finding the 4th vertex of a rectangle\n";
+    int y = 1;
+    while (y == 1)
+    {
+        vertexCoordinates a, b, c;
+        cout << "Please, enter vertex coordinates.\n";
+        a.insert();
+        b.insert();
+        c.insert();
+        if (checkVertex(a, b, c)) cout << "These vertex coordinates are not rectangle vertex coordinates.";
+        else if (stor(a, b, c) == 0) printFourthVertex(a, b, c);
+        else if (stor(a, c, b) == 0) printFourthVertex(a, c, b);
+        else if (stor(b, a, c) == 0) printFourthVertex(b, a, c);
+        else cout << "These vertex coordinates are not rectangle vertex coordinates.";
+
+        cout << "\nDo you want to continue? Enter 1, if you want. Another number, if you don't want: ";
+        cin >> y;
+    }
+
+    return 0;
+}
